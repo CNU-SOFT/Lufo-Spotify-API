@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Playlist Player</title>
+</head>
+<body>
+    <h1>Spotify Playlist Player</h1>
+    <p id="status">Not logged in</p>
+    <button id="login-btn">Login to Spotify</button>
+    <button id="play-btn" style="display:none;">Play Playlist</button>
+    <div id="playlist"></div>
+
+    <script>
+        const clientId = 'ed69f213fb5f455ea53fb603acee7c87'; // Replace with your Spotify App Client ID
+        const redirectUri = 'https://STPRODUCTION.github.io/spotify-integration'; // Replace with your GitHub Pages URL
+        const scopes = 'streaming user-read-email user-read-private'; // Scopes for playback
+        const playlistUri = 'spotify:playlist:4EfZLaV1G2h20faksmoDKZ'; // Replace with your playlist URI
+
+        // Utility function to get the access token from the URL hash
+        function getTokenFromUrl() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            return params.get('access_token');
+        }
+
+        // Step 1: Redirect user to Spotify Authorization page
+        function authorizeSpotify() {
+            const authUrl = `https://accounts.spotify.com/authorize?response_type=token&client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+            window.location = authUrl;
+        }
+
+        // Step 2: Initialize the Spotify Web Playback SDK
+        async function initializeSpotifyPlayer(token) {
+            const script = document.createElement('script');
+            script.src = 'https://sdk.scdn.co/spotify-player.js';
+            document.body.appendChild(script);
+
+            window.onSpotifyWebPlaybackSDKReady = () => {
+                const player = new Spotify.Player({
+                    name: 'Web Playback SDK Player',
+                    getOAuthToken: cb => { cb(token); },
+                    volume: 0.5
+                });
+
+                // Error handling
+                player.addListener('initialization_error', ({ message }) => { console.error(message); });
+                player.addListener('authentication_error', ({ message }) => { console.error(message); });
+                player.addListener('account_error', ({ message }) => { console.error(message); });
+                player.addListener('playback_error', ({ message }) => { console.error(message); });
+
+                // Playback status updates
+                player.addListener('player_state_changed', state => {
+                    console.log('Player state changed:', state);
+                });
+
+                // Ready
+                player.addListener('ready', ({ device_id }) => {
+                    console.log('Player is ready with device ID:', device_id);
+                    document.getElementById('status').textContent = 'Player is ready!';
+
+                    // Enable the play button
+                    const playButton = document.getElementById('play-btn');
+                    playButton.style.display = 'block';
+                    playButton.onclick = () => playPlaylist(device_id, token);
+                });
+
+                // Connect to the player
+                player.connect();
+            };
+        }
+
+        // Step 3: Play the playlist using the Player SDK
+        async function playPlaylist(deviceId, token) {
+            await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ context_uri: playlistUri }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Playlist is playing!');
+                } else {
+                    console.error('Failed to play playlist:', response.statusText);
+                }
+            });
+        }
+
+        // Main execution
+        document.getElementById('login-btn').addEventListener('click', () => {
+            const token = getTokenFromUrl();
+            if (!token) {
+                authorizeSpotify();
+            } else {
+                document.getElementById('status').textContent = 'Logged in!';
+                initializeSpotifyPlayer(token);
+            }
+        });
+
+        // Check for token on page load
+        window.onload = () => {
+            const token = getTokenFromUrl();
+            if (token) {
+                document.getElementById('status').textContent = 'Logged in!';
+                document.getElementById('login-btn').style.display = 'none';
+                initializeSpotifyPlayer(token);
+            }
+        };
+    </script>
+</body>
+</html>
