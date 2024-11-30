@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Login</title>
+</head>
+<body>
+    <h1>Logging in to Spotify...</h1>
+    <script>
+        const clientId = 'ed69f213fb5f455ea53fb603acee7c87'; // Your Spotify App Client ID
+        const redirectUri = 'https://sites.google.com/view/redirectedradio'; // Your Google Sites redirect page
+        const scopes = 'streaming user-read-email user-read-private';
+
+        // Step 1: Redirect to Spotify Authorization
+        const authUrl = `https://accounts.spotify.com/authorize?response_type=token&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+        window.location = authUrl;
+    </script>
+</body>
+</html>
