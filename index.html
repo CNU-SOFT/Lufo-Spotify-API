@@ -9,17 +9,17 @@
     <h1>Spotify Playlist Player</h1>
     <p id="status">Not logged in</p>
     <button id="login-btn">Login to Spotify</button>
-    <div id="device-selection" style="display:none;">
-        <label for="devices">Choose a device:</label>
-        <select id="devices"></select>
+    <div id="controls" style="display:none;">
+        <select id="device-dropdown">
+            <option value="">Select a device</option>
+        </select>
         <button id="play-btn">Play Playlist</button>
     </div>
-    <div id="playlist"></div>
 
     <script>
         const clientId = 'ed69f213fb5f455ea53fb603acee7c87'; // Replace with your Spotify App Client ID
         const redirectUri = 'https://cnu-soft.github.io/Lufo-Spotify-API/'; // Replace with your GitHub Pages URL
-        const scopes = 'streaming user-read-email user-read-private user-modify-playback-state'; // Added scope for playback control
+        const scopes = 'streaming user-read-playback-state user-modify-playback-state'; // Scopes for playback control
         const playlistUri = 'spotify:playlist:4EfZLaV1G2h20faksmoDKZ'; // Replace with your playlist URI
 
         // Utility function to get the access token from the URL hash
@@ -29,89 +29,72 @@
             return params.get('access_token');
         }
 
-        // Step 1: Redirect user to Spotify Authorization page
+        // Redirect to Spotify Authorization
         function authorizeSpotify() {
             const authUrl = `https://accounts.spotify.com/authorize?response_type=token&client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
             window.location = authUrl;
         }
 
-        // Step 2: Fetch available devices
+        // Fetch available devices and populate the dropdown
         async function fetchDevices(token) {
             const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (response.ok) {
-                const data = await response.json();
-                return data.devices;
-            } else {
+
+            if (!response.ok) {
                 console.error('Failed to fetch devices:', response.statusText);
-                return [];
+                return;
+            }
+
+            const data = await response.json();
+            const devices = data.devices;
+            const dropdown = document.getElementById('device-dropdown');
+
+            // Clear previous options
+            dropdown.innerHTML = '<option value="">Select a device</option>';
+
+            // Populate dropdown with devices
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.id;
+                option.textContent = `${device.name} (${device.type})`;
+                dropdown.appendChild(option);
+            });
+
+            if (devices.length === 0) {
+                const noDevicesOption = document.createElement('option');
+                noDevicesOption.textContent = 'No active devices found';
+                noDevicesOption.disabled = true;
+                dropdown.appendChild(noDevicesOption);
             }
         }
 
-        // Step 3: Populate device dropdown and enable play button
-        async function initializeDeviceSelection(token) {
-            const devices = await fetchDevices(token);
-            if (devices.length > 0) {
-                const deviceSelect = document.getElementById('devices');
-                devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.id;
-                    option.textContent = `${device.name} (${device.type})`;
-                    deviceSelect.appendChild(option);
-                });
-
-                document.getElementById('device-selection').style.display = 'block';
-                document.getElementById('play-btn').onclick = () => {
-                    const selectedDeviceId = deviceSelect.value;
-                    playPlaylist(selectedDeviceId, token);
-                };
-            } else {
-                document.getElementById('status').textContent = 'No available devices found. Please open Spotify on a device.';
-            }
-        }
-
-        // Step 4: Play the playlist on the selected device
+        // Play the playlist on the selected device
         async function playPlaylist(deviceId, token) {
-            console.log('Attempting to play playlist on device:', deviceId);
-            await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            if (!deviceId) {
+                alert('Please select a device!');
+                return;
+            }
+
+            const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
                 method: 'PUT',
                 body: JSON.stringify({ context_uri: playlistUri }),
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 }
-            }).then(response => {
-                if (response.ok) {
-                    console.log('Playlist is playing!');
-                } else {
-                    console.error('Failed to play playlist:', response.statusText);
-                }
-            }).catch(error => console.error('Error playing playlist:', error));
+            });
+
+            if (response.ok) {
+                console.log('Playlist is playing!');
+            } else {
+                console.error('Failed to play playlist:', response.statusText);
+            }
         }
 
-        // Main execution
+        // Initialize the app
         document.getElementById('login-btn').addEventListener('click', () => {
             const token = getTokenFromUrl();
             if (!token) {
                 authorizeSpotify();
-            } else {
-                document.getElementById('status').textContent = 'Logged in!';
-                initializeDeviceSelection(token);
-            }
-        });
-
-        // Check for token on page load
-        window.onload = () => {
-            const token = getTokenFromUrl();
-            if (token) {
-                document.getElementById('status').textContent = 'Logged in!';
-                document.getElementById('login-btn').style.display = 'none';
-                initializeDeviceSelection(token);
-            }
-        };
-    </script>
-</body>
-</html>
+            } else 
