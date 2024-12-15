@@ -9,13 +9,17 @@
     <h1>Spotify Playlist Player</h1>
     <p id="status">Not logged in</p>
     <button id="login-btn">Login to Spotify</button>
-    <button id="play-btn" style="display:none;">Play Playlist</button>
+    <div id="device-selection" style="display:none;">
+        <label for="devices">Choose a device:</label>
+        <select id="devices"></select>
+        <button id="play-btn">Play Playlist</button>
+    </div>
     <div id="playlist"></div>
 
     <script>
         const clientId = 'ed69f213fb5f455ea53fb603acee7c87'; // Replace with your Spotify App Client ID
         const redirectUri = 'https://cnu-soft.github.io/Lufo-Spotify-API/'; // Replace with your GitHub Pages URL
-        const scopes = 'streaming user-read-email user-read-private'; // Scopes for playback
+        const scopes = 'streaming user-read-email user-read-private user-modify-playback-state'; // Added scope for playback control
         const playlistUri = 'spotify:playlist:4EfZLaV1G2h20faksmoDKZ'; // Replace with your playlist URI
 
         // Utility function to get the access token from the URL hash
@@ -31,48 +35,47 @@
             window.location = authUrl;
         }
 
-        // Step 2: Initialize the Spotify Web Playback SDK
-        async function initializeSpotifyPlayer(token) {
-            const script = document.createElement('script');
-            script.src = 'https://sdk.scdn.co/spotify-player.js';
-            document.body.appendChild(script);
-
-            window.onSpotifyWebPlaybackSDKReady = () => {
-                const player = new Spotify.Player({
-                    name: 'Web Playback SDK Player',
-                    getOAuthToken: cb => { cb(token); },
-                    volume: 0.5
-                });
-
-                // Error handling
-                player.addListener('initialization_error', ({ message }) => { console.error(message); });
-                player.addListener('authentication_error', ({ message }) => { console.error(message); });
-                player.addListener('account_error', ({ message }) => { console.error(message); });
-                player.addListener('playback_error', ({ message }) => { console.error(message); });
-
-                // Playback status updates
-                player.addListener('player_state_changed', state => {
-                    console.log('Player state changed:', state);
-                });
-
-                // Ready
-                player.addListener('ready', ({ device_id }) => {
-                    console.log('Player is ready with device ID:', device_id);
-                    document.getElementById('status').textContent = 'Player is ready!';
-
-                    // Enable the play button
-                    const playButton = document.getElementById('play-btn');
-                    playButton.style.display = 'block';
-                    playButton.onclick = () => playPlaylist(device_id, token);
-                });
-
-                // Connect to the player
-                player.connect();
-            };
+        // Step 2: Fetch available devices
+        async function fetchDevices(token) {
+            const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data.devices;
+            } else {
+                console.error('Failed to fetch devices:', response.statusText);
+                return [];
+            }
         }
 
-        // Step 3: Play the playlist using the Player SDK
+        // Step 3: Populate device dropdown and enable play button
+        async function initializeDeviceSelection(token) {
+            const devices = await fetchDevices(token);
+            if (devices.length > 0) {
+                const deviceSelect = document.getElementById('devices');
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `${device.name} (${device.type})`;
+                    deviceSelect.appendChild(option);
+                });
+
+                document.getElementById('device-selection').style.display = 'block';
+                document.getElementById('play-btn').onclick = () => {
+                    const selectedDeviceId = deviceSelect.value;
+                    playPlaylist(selectedDeviceId, token);
+                };
+            } else {
+                document.getElementById('status').textContent = 'No available devices found. Please open Spotify on a device.';
+            }
+        }
+
+        // Step 4: Play the playlist on the selected device
         async function playPlaylist(deviceId, token) {
+            console.log('Attempting to play playlist on device:', deviceId);
             await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
                 method: 'PUT',
                 body: JSON.stringify({ context_uri: playlistUri }),
@@ -86,7 +89,7 @@
                 } else {
                     console.error('Failed to play playlist:', response.statusText);
                 }
-            });
+            }).catch(error => console.error('Error playing playlist:', error));
         }
 
         // Main execution
@@ -96,7 +99,7 @@
                 authorizeSpotify();
             } else {
                 document.getElementById('status').textContent = 'Logged in!';
-                initializeSpotifyPlayer(token);
+                initializeDeviceSelection(token);
             }
         });
 
@@ -106,7 +109,7 @@
             if (token) {
                 document.getElementById('status').textContent = 'Logged in!';
                 document.getElementById('login-btn').style.display = 'none';
-                initializeSpotifyPlayer(token);
+                initializeDeviceSelection(token);
             }
         };
     </script>
